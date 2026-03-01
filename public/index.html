@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Celesys AI — Incident Management Platform</title>
+<meta name="description" content="AI-powered incident management: 6 agents that observe, diagnose, fix, and verify. Reduce MTTR from 47 minutes to 5.5 minutes.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',system-ui,sans-serif;background:#080C16;color:#D4D9E3;min-height:100vh}
+@keyframes fu{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes bl{0%,100%{opacity:1}50%{opacity:.3}}
+.fu{animation:fu .3s ease-out forwards}.bl{animation:bl 1.2s ease-in-out infinite}
+.mn{font-family:'JetBrains Mono',monospace}
+pre.cb{background:#060910;border:1px solid #151B2E;border-radius:8px;padding:12px;font-size:11px;overflow:auto;color:#8892A8;line-height:1.6;font-family:'JetBrains Mono',monospace;white-space:pre-wrap;word-break:break-word}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:#080C16}
+::-webkit-scrollbar-thumb{background:#1A2138;border-radius:3px}
+/* Back to Celesys link */
+.back-link{display:inline-flex;align-items:center;gap:6px;padding:6px 14px;border-radius:6px;font-size:12px;color:#64748B;text-decoration:none;transition:all .2s}
+.back-link:hover{color:#60A5FA;background:#3B82F612}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const {useState,useEffect,useCallback,useRef} = React;
+
+const STAGES=[
+{id:"ingest",name:"Alert Ingestion",icon:"🚨",col:"#EF4444",analogy:"911 Dispatcher",humanStep:"Engineer paged at 3 AM. Opens laptop, VPN, finds broken service.",humanTime:"5–8 min",aiStep:"Webhook received → deduplicated → correlation ID → pipeline started.",aiTime:"0.5 sec",checks:["Correlation ID assigned","Deduplication passed","State → TRIAGING","Kafka event published"],response:{status:"ACCEPTED",correlationId:"c7e3a1f0-9d2b-4e8f-b5c1-2a8d6f3e9b0c",currentState:"TRIAGING",message:"Incident created, pipeline initiated"}},
+{id:"observe",name:"Observability Agent",icon:"🔍",col:"#3B82F6",analogy:"ER Triage Nurse",humanStep:"Opens Datadog → Grafana → CloudWatch. Cross-references 4 dashboards manually.",humanTime:"8–15 min",aiStep:"Parallel queries to Datadog + Prometheus + CloudWatch. 6 metrics, 4 anomalies detected.",aiTime:"12 sec",checks:["3 backends queried","4 anomalies found","Confidence: 92%","Summary generated"],response:{metricsAnalyzed:6,backends:["datadog","prometheus","cloudwatch"],anomalies:[{metric:"http.error_rate_5xx",current:"23.5%",baseline:"0.5%",deviation:"+4600%"},{metric:"db.query_latency_p99",current:"2850ms",baseline:"120ms",deviation:"+2275%"},{metric:"cpu_utilization",current:"87.3%",baseline:"35%",deviation:"+149%"},{metric:"rds.read_latency",current:"45.2ms",baseline:"8.3ms",deviation:"+445%"}],confidence:0.92,summary:"Critical DB latency spike causing cascading HTTP 500 errors"}},
+{id:"diagnose",name:"Diagnostic Agent",icon:"🧬",col:"#8B5CF6",analogy:"Crime Scene Detective",humanStep:"Grep Splunk logs. git log for recent deploys. Ask Slack: 'Did anyone deploy?'",humanTime:"15–30 min",aiStep:"Parallel: Splunk logs + GitHub commits + ArgoCD + RAG search of 847 past incidents.",aiTime:"18 sec",checks:["Splunk log correlation","Commit a1b2c3d4 identified","Deploy timing match","RAG: 92% past match","Confidence: 94%"],response:{primaryHypothesis:{description:"Unindexed SQL query in commit a1b2c3d4 causing full table scans",confidence:0.94,causalChain:"New Code → Full Table Scan → Pool Exhaustion → HTTP 500s"},evidence:{logs:3,commits:1,deployments:1,pastMatch:"INC-2024-0847 (92% similar)"},suggestedActions:["ROLLBACK to v2.14.2","Add index on orders(customer_id)"]}},
+{id:"remediate",name:"Action Agent",icon:"⚡",col:"#F59E0B",analogy:"Surgeon",humanStep:"Write kubectl command. Triple-check namespace. Get Slack approval. Paste in terminal.",humanTime:"5–15 min",aiStep:"Risk classify → dry-run diff → rollback bookmark → auto-approve (MEDIUM) → execute.",aiTime:"4.2 sec",checks:["Risk: MEDIUM","Dry-run first","Bookmark saved (rev 43)","Auto-approved","Rollback: SUCCESS"],response:{actionType:"ROLLBACK",command:"kubectl rollout undo deploy/checkout-service -n production --to-revision=42",riskTier:"MEDIUM",approvalStatus:"AUTO_APPROVED",dryRunDiff:"Image: v2.14.3 → v2.14.2 | 3 pods rolling",rollbackBookmark:{savedRevision:43,rollbackCmd:"kubectl rollout undo --to-revision=43"},executionStatus:"SUCCESS",durationMs:4200}},
+{id:"validate",name:"Validation Agent",icon:"✅",col:"#10B981",analogy:"Post-Op Nurse",humanStep:"Watch dashboards 10–20 min. Eyeball metrics. Maybe forget. Declare fixed on gut feeling.",humanTime:"10–20 min (or skipped)",aiStep:"Wait 180s → re-query all metrics → 6 statistical checks vs 24h baseline → ALL must pass.",aiTime:"3 min + 8 sec",checks:["Wait 180s done","Error rate: 0.3% ✓","DB latency: 95ms ✓","6/6 checks PASS","Recommend: CLOSE"],response:{validationStatus:"CONFIRMED",stabilizationWindowSec:180,checks:[{name:"Error Rate",measured:"0.3%",threshold:"< 0.65%",result:"PASS"},{name:"DB Latency",measured:"95ms",threshold:"< 156ms",result:"PASS"},{name:"CPU",measured:"38%",threshold:"< 50.75%",result:"PASS"},{name:"ALB Hosts",measured:"4/4",threshold:"≥ 4",result:"PASS"},{name:"Synthetic",measured:"99.9%",threshold:"≥ 99%",result:"PASS"},{name:"New Errors",measured:"0",threshold:"= 0",result:"PASS"}],recommendation:"CLOSE_INCIDENT"}},
+{id:"report",name:"Reporting Agent",icon:"📋",col:"#6366F1",analogy:"Court Reporter",humanStep:"Write post-mortem in GDoc (or skip — 60% do). Create Jira. Post Slack. Forget runbook.",humanTime:"30–60 min (or never)",aiStep:"Auto-generate post-mortem + Jira ticket + Slack notify + RAG knowledge base update.",aiTime:"3 sec",checks:["Post-mortem generated","Jira: INC-2026-0142","Slack notified","PagerDuty resolved","RAG updated","MTTR: 5m 30s"],response:{title:"checkout-service 500s — unindexed SQL query",jiraTicket:"INC-2026-0142",slackNotified:"#incident-response",pagerDutyResolved:true,ragUpdated:true,followUps:["P1: Add DB index","P2: CI/CD query check","P3: Circuit breaker"],totalMTTR:"5 min 30 sec"}}
+];
+const DURATIONS=[1000,1800,2200,1800,2400,1200];
+
+const PLAYBOOK=[
+{step:1,title:"Discovery — Feel Their Pain",time:"30 min",col:"#EF4444",goal:"Get them to say their MTTR out loud.",script:"Walk me through your last SEV1 — who got paged, how long was investigation, did you get a post-mortem?",questions:["What's your MTTR for SEV1?","How many engineers per incident?","Post-mortem completion rate?","On-call burnout level?"],signals:[["We spend most time figuring out what changed","→ Diagnostic Agent sells itself"],["Post-mortems are inconsistent","→ Reporting Agent is the hook"],["Juniors can't investigate alone","→ System IS the senior SRE"]],exit:"They tell you: MTTR, incidents/month, team size, biggest pain"},
+{step:2,title:"Live Demo — Show, Don't Tell",time:"45 min",col:"#3B82F6",goal:"Run the pipeline live. 47 min compressed to 5.5 min.",script:"Watch each AI agent. [Run Demo] See? Diagnostic Agent correlated a Splunk log with a GitHub commit in 18 seconds — your engineers spend 20 minutes on that.",questions:["Which monitoring tools? (We integrate all)","Deployment toolchain? K8s/Terraform?","Last SEV1? Let's replay through our system"],signals:[["Can it work with our Datadog?","→ Buying signal, imagining it in their stack"],["What about custom runbooks?","→ Thinking implementation — very good"],["Too complex for AI","→ 80% follow patterns, automate those"]],exit:"They ask 'What would it take to try this?'"},
+{step:3,title:"Tech Deep-Dive — Win the SREs",time:"60 min",col:"#8B5CF6",goal:"Address 'what if it breaks production?' with safety architecture.",script:"4 risk tiers. LOW/MEDIUM auto-execute. HIGH/CRITICAL need Slack approval. Every action: dry-run first + rollback bookmark saved.",questions:["What would you automate today?","Your change approval process?","How you handle rollbacks?"],signals:[["What about our database?","→ Show RBAC / blast radius model"],["Start with just observability?","→ Perfect — Observer tier $2K/mo"],["SRE lead nodding","→ Technical blocker cleared"]],exit:"SRE team agrees to shadow mode trial"},
+{step:4,title:"Shadow Mode — Prove Risk-Free",time:"2-4 wks",col:"#F59E0B",goal:"Read-only mode against real incidents. Zero risk.",script:"Read-only Datadog/Splunk keys. 2 weeks parallel. We show what we WOULD have done. Zero production writes.",questions:["Read-only API keys available?","Who gets weekly shadow report?","Expected incidents/week?"],signals:[["Check with security","→ Normal — offer SOC2 docs"],["Scope to one service?","→ Perfect, start narrow"],["How long until results?","→ Already imagining success"]],exit:"Shadow report: 'Diagnosed 12/14 correctly, 8x faster'"},
+{step:5,title:"ROI Close — VP Meeting",time:"30 min",col:"#10B981",goal:"Shadow results + math = signed contract.",script:"12/14 incidents diagnosed correctly. 30 sec vs 22 min. $8K/month saves ~$47K/month. 6x ROI from day one.",questions:["Which tier fits?","Top 5 services or all?","Procurement process?"],signals:[["Run by finance","→ They're buying, ask timeline"],["Annual pricing?","→ Offer 15% annual discount"],["Autonomous tier?","→ Don't oversell, earn it"]],exit:"Signed contract → begin onboarding"}
+];
+
+const OBJECTIONS=[
+{q:"What if it breaks production?",a:"4-tier risk model. HIGH/CRITICAL always need Slack approval. Dry-run + rollback bookmark on every action. Start in shadow mode with zero writes."},
+{q:"We already have PagerDuty",a:"We integrate WITH PagerDuty. They're the fire alarm. We're the fire department — investigate, fix, prove it's fixed, write the report."},
+{q:"Incidents too unique for AI",a:"80% follow patterns: bad deploy, resource exhaustion, dependency failure. Automate the 80%. Engineers focus on the novel 20%."},
+{q:"Why not build it ourselves?",a:"~6 months senior SRE time ($75K+). At $8K/month we're 10x cheaper and live in 2 weeks."},
+{q:"Data security?",a:"Runs in YOUR K8s cluster. No data leaves your network. Read-only keys. Scoped RBAC. 365-day immutable audit log."}
+];
+
+function App(){
+const[tab,setTab]=useState("demo");
+const[mode,setMode]=useState("sim");
+const[running,setRunning]=useState(false);
+const[current,setCurrent]=useState(-1);
+const[done,setDone]=useState({});
+const[open,setOpen]=useState(null);
+const[elapsed,setElapsed]=useState(0);
+const[apiUrl,setApiUrl]=useState("http://localhost:8080");
+const[openPlay,setOpenPlay]=useState(null);
+const[openObj,setOpenObj]=useState(null);
+const timerRef=useRef(null);
+const abortRef=useRef(false);
+
+useEffect(()=>()=>{if(timerRef.current)clearInterval(timerRef.current)},[]);
+
+const reset=useCallback(()=>{
+abortRef.current=true;setCurrent(-1);setRunning(false);setDone({});setOpen(null);setElapsed(0);
+if(timerRef.current){clearInterval(timerRef.current);timerRef.current=null}
+},[]);
+
+const runSim=useCallback(()=>{
+reset();
+setTimeout(()=>{
+abortRef.current=false;setRunning(true);
+const t0=Date.now();
+timerRef.current=setInterval(()=>setElapsed(Date.now()-t0),80);
+let i=0;
+const go=()=>{
+if(abortRef.current||i>=STAGES.length){setRunning(false);if(timerRef.current)clearInterval(timerRef.current);return}
+const sid=STAGES[i].id;const dur=DURATIONS[i];const ci=i;
+setCurrent(i);setOpen(i);
+setTimeout(()=>{if(abortRef.current)return;setDone(p=>({...p,[sid]:STAGES[ci].response}));i++;setTimeout(go,250)},dur);
+};go();
+},50);
+},[reset]);
+
+const runLive=useCallback(async()=>{
+reset();await new Promise(r=>setTimeout(r,50));
+abortRef.current=false;setRunning(true);
+const t0=Date.now();timerRef.current=setInterval(()=>setElapsed(Date.now()-t0),80);
+let cid=null;
+for(let i=0;i<STAGES.length;i++){
+if(abortRef.current)break;const stage=STAGES[i];setCurrent(i);setOpen(i);
+let data=stage.response;
+try{
+if(i===0){const r=await fetch(apiUrl+"/api/v1/incidents/webhook",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({source:"datadog",service:"checkout-service",title:"HTTP 500 spike",severity:"SEV1"})});data=await r.json();cid=data.correlationId||null}
+else if(cid){const r=await fetch(apiUrl+"/api/v1/incidents/"+cid);data=await r.json()}
+}catch(e){data={...stage.response,_fallback:true,_error:e.message}}
+if(abortRef.current)break;setDone(p=>({...p,[stage.id]:data}));await new Promise(r=>setTimeout(r,600));
+}
+setRunning(false);if(timerRef.current)clearInterval(timerRef.current);
+},[reset,apiUrl]);
+
+const fmt=ms=>{const s=ms/1000;return s>=60?Math.floor(s/60)+"m "+Math.floor(s%60)+"s":s.toFixed(1)+"s"};
+const dc=Object.keys(done).length;const allDone=dc===STAGES.length;
+const Badge=({c,children})=>React.createElement("span",{style:{display:"inline-block",padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:600,background:c+"18",color:c}},children);
+
+return React.createElement("div",{style:{minHeight:"100vh"}},
+
+// HEADER
+React.createElement("div",{style:{padding:"16px 24px 12px",borderBottom:"1px solid #151B2E"}},
+React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}},
+React.createElement("div",null,
+React.createElement("a",{href:"https://celesys.ai",className:"back-link"},"← Back to Celesys AI"),
+React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,marginTop:8}},
+React.createElement("div",{style:{fontSize:9,letterSpacing:3,color:"#3D4663",fontWeight:700}},"CELESYS AI"),
+React.createElement("div",{style:{width:1,height:16,background:"#1A2138"}}),
+React.createElement("h1",{style:{fontSize:20,fontWeight:700,color:"#E8ECF4"}},"Incident Management Platform"))),
+React.createElement("div",{style:{display:"flex",gap:8,alignItems:"center"}},
+(running||dc>0)&&React.createElement("span",{className:"mn",style:{fontSize:16,color:allDone?"#10B981":"#60A5FA"}},allDone?"✅ ":"",fmt(elapsed)),
+tab==="demo"&&React.createElement("button",{onClick:()=>{if(running)reset();else if(mode==="live")runLive();else runSim()},style:{padding:"10px 24px",borderRadius:9,border:"none",cursor:"pointer",background:running?"#EF4444":"linear-gradient(135deg,#3B82F6,#6366F1)",color:"#fff",fontWeight:700,fontSize:14,fontFamily:"inherit"}},running?"⏹ Stop":dc>0?"↻ Replay":"▶ Run Pipeline"))),
+React.createElement("div",{style:{display:"flex",gap:6,marginTop:12}},
+[{k:"demo",l:"▶ Pipeline"},{k:"playbook",l:"📖 Sales Playbook"},{k:"config",l:"🔌 Config"}].map(t=>
+React.createElement("div",{key:t.k,onClick:()=>setTab(t.k),style:{padding:"8px 16px",borderRadius:7,cursor:"pointer",fontSize:12,fontWeight:500,border:tab===t.k?"1px solid #3B82F640":"1px solid transparent",background:tab===t.k?"#3B82F612":"transparent",color:tab===t.k?"#60A5FA":"#64748B"}},t.l)))),
+
+// CONTENT
+React.createElement("div",{style:{padding:"16px 24px 48px",maxWidth:940,margin:"0 auto"}},
+
+// DEMO TAB
+tab==="demo"&&React.createElement("div",null,
+React.createElement("div",{style:{display:"flex",gap:6,marginBottom:16}},
+[{k:"sim",l:"🎬 Simulated",s:"No backend"},{k:"compare",l:"⚔️ Human vs AI",s:"Time comparison"},{k:"live",l:"🔴 Live API",s:apiUrl}].map(m=>
+React.createElement("div",{key:m.k,onClick:()=>setMode(m.k),style:{flex:1,padding:"10px 8px",borderRadius:7,cursor:"pointer",textAlign:"center",border:mode===m.k?"1px solid #3B82F640":"1px solid transparent",background:mode===m.k?"#3B82F612":"transparent"}},
+React.createElement("div",{style:{fontSize:12,color:mode===m.k?"#60A5FA":"#64748B"}},m.l),
+React.createElement("div",{style:{fontSize:9,color:"#3D4663",marginTop:2}},m.s)))),
+
+mode==="live"&&dc===0&&!running&&React.createElement("div",{style:{background:"#0D1220",border:"1px solid #F59E0B30",borderRadius:12,padding:14,marginBottom:14,fontSize:12,color:"#F59E0B"}},"⚠️ Needs backend at ",React.createElement("span",{className:"mn"},apiUrl),". Falls back to simulated if unavailable."),
+
+React.createElement("div",{style:{display:"flex",gap:3,marginBottom:16,height:4}},
+STAGES.map((s,i)=>React.createElement("div",{key:s.id,style:{flex:1,borderRadius:2,transition:"all .3s",background:done[s.id]?s.col:current===i?s.col+"50":"#151B2E"}}))),
+
+STAGES.map((s,i)=>{
+const isActive=current===i&&!done[s.id];const isDone=!!done[s.id];const isOpen=open===i;
+const resp=done[s.id]||null;const isFB=resp&&resp._fallback;
+return React.createElement("div",{key:s.id,onClick:()=>setOpen(isOpen?null:i),style:{background:"#0D1220",border:"1px solid "+(isActive?s.col+"60":isDone?s.col+"30":"#1A2138"),borderRadius:12,padding:18,marginBottom:8,cursor:"pointer",opacity:!isDone&&!isActive&&current>=0?.35:1,transition:"all .2s"}},
+React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12}},
+React.createElement("span",{style:{fontSize:26}},s.icon),
+React.createElement("div",{style:{flex:1}},
+React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}},
+React.createElement("span",{style:{fontSize:13,fontWeight:700,color:isDone||isActive?s.col:"#4D5571"}},s.name),
+isActive&&React.createElement("span",{className:"bl"},React.createElement(Badge,{c:s.col},"PROCESSING")),
+isDone&&React.createElement(Badge,{c:"#10B981"},"DONE ✓"),
+isFB&&React.createElement(Badge,{c:"#F59E0B"},"FALLBACK")),
+React.createElement("div",{style:{fontSize:11,color:"#4D5571",marginTop:2}},'"'+s.analogy+'"')),
+React.createElement("span",{style:{color:"#2D3555",fontSize:14}},isOpen?"▾":"▸")),
+
+isOpen&&React.createElement("div",{className:"fu",onClick:e=>e.stopPropagation(),style:{marginTop:14,paddingTop:14,borderTop:"1px solid #151B2E"}},
+React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}},
+React.createElement("div",{style:{padding:12,borderRadius:8,background:"#EF444408",border:"1px solid #EF444418"}},
+React.createElement("div",{style:{fontSize:10,fontWeight:700,color:"#EF4444",marginBottom:6}},"👤 HUMAN"),
+React.createElement("div",{style:{fontSize:11,color:"#8892A8",lineHeight:1.6,marginBottom:4}},s.humanStep),
+React.createElement("div",{className:"mn",style:{fontSize:16,fontWeight:700,color:"#EF4444"}},s.humanTime)),
+React.createElement("div",{style:{padding:12,borderRadius:8,background:"#10B98108",border:"1px solid #10B98118"}},
+React.createElement("div",{style:{fontSize:10,fontWeight:700,color:"#10B981",marginBottom:6}},"🤖 AI AGENT"),
+React.createElement("div",{style:{fontSize:11,color:"#8892A8",lineHeight:1.6,marginBottom:4}},s.aiStep),
+React.createElement("div",{className:"mn",style:{fontSize:16,fontWeight:700,color:"#10B981"}},s.aiTime))),
+isDone&&React.createElement("div",{style:{marginBottom:14}},
+React.createElement("div",{style:{fontSize:10,fontWeight:700,color:"#3D4663",letterSpacing:1.5,marginBottom:8}},"CHECKS"),
+React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:5}},s.checks.map((c,ci)=>React.createElement(Badge,{key:ci,c:"#10B981"},"✓ "+c)))),
+isDone&&resp&&React.createElement("div",null,
+React.createElement("div",{className:"mn",style:{fontSize:10,fontWeight:700,color:s.col,letterSpacing:1.5,marginBottom:6}},mode==="live"?"API RESPONSE":"AGENT OUTPUT"),
+resp._error&&React.createElement("div",{style:{fontSize:11,color:"#EF4444",marginBottom:6}},"⚠️ "+resp._error+" — simulated fallback"),
+React.createElement("pre",{className:"cb"},JSON.stringify(resp,(k,v)=>k.startsWith("_")?undefined:v,2))))))}),
+
+allDone&&React.createElement("div",{className:"fu",style:{background:"#0D1220",border:"1px solid #10B98130",borderRadius:12,padding:24,marginTop:8,textAlign:"center"}},
+React.createElement("div",{style:{fontSize:11,fontWeight:700,color:"#10B981",letterSpacing:2,marginBottom:8}},"INCIDENT RESOLVED"),
+React.createElement("div",{className:"mn",style:{fontSize:28,fontWeight:700,color:"#10B981"}},"5 min 30 sec MTTR"),
+React.createElement("div",{style:{color:"#4D5571",fontSize:12,marginTop:4}},"vs. industry avg 47 min (87% faster)"),
+React.createElement("div",{style:{display:"flex",justifyContent:"center",gap:24,marginTop:16}},
+[["Agents","6"],["Checks",String(STAGES.reduce((a,s)=>a+s.checks.length,0))],["Human","0"],["Events","6"]].map(([n,v])=>
+React.createElement("div",{key:n},React.createElement("div",{className:"mn",style:{fontSize:18,fontWeight:700,color:"#E8ECF4"}},v),React.createElement("div",{style:{fontSize:10,color:"#4D5571"}},n)))),
+React.createElement("div",{style:{marginTop:16}},
+React.createElement("a",{href:"https://celesys.ai",style:{display:"inline-block",padding:"10px 28px",borderRadius:9,background:"linear-gradient(135deg,#10B981,#059669)",color:"#fff",fontWeight:700,fontSize:14,textDecoration:"none"}},"← Back to Celesys AI"),
+React.createElement("a",{href:"mailto:contact@celesys.ai?subject=Incident%20AI%20Demo%20Request",style:{display:"inline-block",padding:"10px 28px",borderRadius:9,background:"linear-gradient(135deg,#3B82F6,#6366F1)",color:"#fff",fontWeight:700,fontSize:14,textDecoration:"none",marginLeft:10}},"📧 Request Demo")))),
+
+// PLAYBOOK TAB
+tab==="playbook"&&React.createElement("div",null,
+React.createElement("h2",{style:{fontSize:18,fontWeight:700,color:"#E8ECF4",marginBottom:4}},"5-Step Customer Conviction"),
+React.createElement("p",{style:{fontSize:12,color:"#4D5571",marginBottom:20,lineHeight:1.6}},"Sell ",React.createElement("strong",{style:{color:"#60A5FA"}},'"5-minute MTTR and 60% fewer 3 AM pages."')),
+
+PLAYBOOK.map((p,i)=>React.createElement("div",{key:i,onClick:()=>setOpenPlay(openPlay===i?null:i),style:{background:"#0D1220",border:"1px solid "+(openPlay===i?p.col+"40":"#1A2138"),borderRadius:12,padding:18,marginBottom:8,cursor:"pointer"}},
+React.createElement("div",{style:{display:"flex",alignItems:"center",gap:12}},
+React.createElement("div",{style:{width:32,height:32,borderRadius:"50%",background:p.col+"18",border:"2px solid "+p.col,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:p.col,flexShrink:0}},p.step),
+React.createElement("div",{style:{flex:1}},
+React.createElement("div",{style:{fontSize:14,fontWeight:700,color:p.col}},p.title),
+React.createElement("div",{style:{fontSize:11,color:"#4D5571"}},p.goal)),
+React.createElement(Badge,{c:"#3D4663"},p.time),
+React.createElement("span",{style:{color:"#2D3555"}},openPlay===i?"▾":"▸")),
+openPlay===i&&React.createElement("div",{className:"fu",onClick:e=>e.stopPropagation(),style:{marginTop:16,paddingTop:16,borderTop:"1px solid #151B2E"}},
+React.createElement("div",{style:{marginBottom:14}},
+React.createElement("div",{style:{fontSize:10,fontWeight:700,color:"#F59E0B",letterSpacing:1.5,marginBottom:6}},"💬 SAY THIS"),
+React.createElement("div",{style:{fontSize:12,color:"#B8BFD1",lineHeight:1.8,padding:14,background:"#F59E0B06",border:"1px solid #F59E0B15",borderRadius:8,fontStyle:"italic"}},'"'+p.script+'"')),
+React.createElement("div",{style:{marginBottom:14}},
+React.createElement("div",{style:{fontSize:10,fontWeight:700,color:"#3B82F6",letterSpacing:1.5,marginBottom:6}},"❓ ASK"),
+p.questions.map((q,qi)=>React.createElement("div",{key:qi,style:{fontSize:12,color:"#8892A8",padding:"4px 0"}},React.createElement("span",{style:{color:"#3B82F6"}},"→ "),q))),
+React.createElement("div",{style:{marginBottom:14}},
+React.createElement("div",{style:{fontSize:10,fontWeight:700,color:"#A78BFA",letterSpacing:1.5,marginBottom:6}},"👂 BUYING SIGNALS"),
+p.signals.map((sig,si)=>React.createElement("div",{key:si,style:{fontSize:12,padding:"4px 0",display:"flex",gap:6,flexWrap:"wrap"}},
+React.createElement("span",{style:{color:"#EF4444"}},'"'+sig[0]+'"'),
+React.createElement("span",{style:{color:"#10B981"}},sig[1])))),
+React.createElement("div",{style:{padding:12,borderRadius:8,background:"#10B98108",border:"1px solid #10B98118"}},
+React.createElement("div",{style:{fontSize:10,fontWeight:700,color:"#10B981",marginBottom:4}},"✅ MOVE ON WHEN:"),
+React.createElement("div",{style:{fontSize:12,color:"#8892A8"}},p.exit))))),
+
+React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:"#E8ECF4",marginTop:24,marginBottom:12}},"🛡️ Objection Handling"),
+OBJECTIONS.map((o,i)=>React.createElement("div",{key:i,onClick:()=>setOpenObj(openObj===i?null:i),style:{background:"#0D1220",border:"1px solid #1A2138",borderRadius:12,padding:16,marginBottom:6,cursor:"pointer"}},
+React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+React.createElement("span",{style:{fontSize:13,fontWeight:600,color:"#EF4444"}},'🗣️ "'+o.q+'"'),
+React.createElement("span",{style:{color:"#2D3555"}},openObj===i?"▾":"▸")),
+openObj===i&&React.createElement("div",{className:"fu",onClick:e=>e.stopPropagation(),style:{marginTop:10,padding:12,borderRadius:8,background:"#10B98108",border:"1px solid #10B98118"}},
+React.createElement("div",{style:{fontSize:12,color:"#B8BFD1",lineHeight:1.7}},"→ "+o.a)))),
+
+React.createElement("h3",{style:{fontSize:16,fontWeight:700,color:"#E8ECF4",marginTop:24,marginBottom:12}},"💰 Pricing Tiers"),
+React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}},
+[{n:"Observer",p:"$2K/mo",d:"Observe + Diagnose",t:"AI investigation only"},{n:"Responder",p:"$8K/mo",d:"+ Action + Reporting",t:"Auto-remediation ← SELL THIS"},{n:"Autonomous",p:"$18K/mo",d:"All + Validation + RAG",t:"Full self-healing"}].map(tier=>
+React.createElement("div",{key:tier.n,style:{padding:16,borderRadius:10,background:"#060910",border:"1px solid #151B2E",textAlign:"center"}},
+React.createElement("div",{style:{fontSize:13,fontWeight:700,color:"#E8ECF4"}},tier.n),
+React.createElement("div",{className:"mn",style:{fontSize:24,fontWeight:700,color:"#60A5FA",margin:"6px 0"}},tier.p),
+React.createElement("div",{style:{fontSize:10,color:"#4D5571"}},tier.d),
+React.createElement("div",{style:{fontSize:10,color:"#8892A8",marginTop:4,fontStyle:"italic"}},tier.t)))),
+React.createElement("div",{style:{background:"#0D1220",border:"1px solid #10B98130",borderRadius:12,padding:20,marginTop:16,textAlign:"center"}},
+React.createElement("div",{style:{fontSize:12,color:"#4D5571",marginBottom:6}},"Show this to the VP:"),
+React.createElement("div",{className:"mn",style:{fontSize:18,fontWeight:700,color:"#10B981"}},"$8K/mo cost → ~$47K/mo savings = 6x ROI"))),
+
+// CONFIG TAB
+tab==="config"&&React.createElement("div",null,
+React.createElement("h2",{style:{fontSize:18,fontWeight:700,color:"#E8ECF4",marginBottom:16}},"API Configuration"),
+React.createElement("div",{style:{background:"#0D1220",border:"1px solid #1A2138",borderRadius:12,padding:18,marginBottom:12}},
+React.createElement("div",{style:{fontSize:10,fontWeight:700,color:"#3B82F6",letterSpacing:1.5,marginBottom:10}},"QUICK START"),
+React.createElement("pre",{className:"cb"},"cd docker && docker compose up -d\n./mvnw spring-boot:run\ncurl http://localhost:8080/api/v1/incidents/health")),
+React.createElement("div",{style:{background:"#0D1220",border:"1px solid #1A2138",borderRadius:12,padding:18,marginBottom:12}},
+React.createElement("div",{style:{fontSize:10,fontWeight:700,color:"#F59E0B",letterSpacing:1.5,marginBottom:8}},"BACKEND URL"),
+React.createElement("input",{value:apiUrl,onChange:e=>setApiUrl(e.target.value),className:"mn",style:{background:"#060910",border:"1px solid #1A2138",borderRadius:8,padding:"10px 14px",color:"#E8ECF4",fontSize:13,width:"100%",outline:"none"},placeholder:"http://localhost:8080"})),
+React.createElement("div",{style:{display:"flex",gap:10,marginBottom:20}},
+React.createElement("button",{onClick:async()=>{try{const r=await fetch(apiUrl+"/api/v1/incidents/health");const d=await r.json();alert("✅ Connected! "+JSON.stringify(d))}catch(e){alert("❌ "+e.message)}},style:{padding:"10px 24px",borderRadius:9,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#10B981,#059669)",color:"#fff",fontWeight:700,fontSize:14,fontFamily:"inherit"}},"Test Connection"),
+React.createElement("button",{onClick:async()=>{try{const r=await fetch(apiUrl+"/api/v1/incidents/webhook",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({source:"demo",service:"checkout-service",title:"Test",severity:"SEV2"})});const d=await r.json();alert("✅ "+JSON.stringify(d))}catch(e){alert("❌ "+e.message)}},style:{padding:"10px 24px",borderRadius:9,border:"none",cursor:"pointer",background:"linear-gradient(135deg,#A78BFA,#7C3AED)",color:"#fff",fontWeight:700,fontSize:14,fontFamily:"inherit"}},"Send Test Alert")))),
+
+// FOOTER
+React.createElement("div",{style:{padding:"24px",borderTop:"1px solid #151B2E",textAlign:"center",marginTop:40}},
+React.createElement("div",{style:{fontSize:10,color:"#3D4663",letterSpacing:2,marginBottom:6}},"POWERED BY"),
+React.createElement("a",{href:"https://celesys.ai",style:{fontSize:14,fontWeight:700,color:"#60A5FA",textDecoration:"none"}},"CELESYS AI"),
+React.createElement("div",{style:{fontSize:11,color:"#3D4663",marginTop:6}},"© 2026 Celesys AI · All rights reserved")));}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
