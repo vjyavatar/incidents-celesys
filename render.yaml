@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: incidents-celesys
+    runtime: static
+    buildCommand: echo "No build needed"
+    staticPublishPath: ./public
+    domains:
+      - incidents.celesys.ai
